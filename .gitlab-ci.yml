@@ -1,0 +1,45 @@
+# GitLab CI — the same verification gate as .github/workflows/ci.yml, for teams on
+# GitLab. It runs the identical command list to AGENTS.md's "Verification loop", so
+# local == CI on either host. Keep all three in sync when you change the gate.
+
+default:
+  # uv's base image (uv on Debian slim); the interpreter is installed per matrix
+  # job below, which keeps this robust even for brand-new Python releases. The uv
+  # download cache is reused across runs, keyed on the lockfile.
+  image: ghcr.io/astral-sh/uv:bookworm-slim
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .cache/uv
+
+variables:
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+  UV_LINK_MODE: copy
+
+stages:
+  - verify
+
+verify:
+  stage: verify
+  parallel:
+    matrix:
+      # Match requires-python (>=3.12): verify the promised range, don't assume it.
+      # 3.14 is stable as of Oct 2025.
+      - PYTHON_VERSION: ["3.12", "3.13", "3.14"]
+  script:
+    - uv python install "$PYTHON_VERSION"
+    # --locked fails if uv.lock is stale, so an agent can't quietly drift deps.
+    - uv sync --locked --python "$PYTHON_VERSION"
+    - uv run ruff check .
+    - uv run ruff format --check .
+    - uv run mypy src
+    - uv run vulture # unreachable/dead functions ruff can't see
+    - uv run pip-audit # dependency CVE scan
+    - uv run pytest --cov
+
+# Note: the GitHub workflow also runs `zizmor` to lint its Actions files — that
+# scanner is Actions-specific, so it has no equivalent here. GitLab teams wanting
+# static app-security scanning can add its built-in template:
+#   include: { template: Security/SAST.gitlab-ci.yml }

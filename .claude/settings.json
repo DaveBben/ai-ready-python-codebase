@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(uv sync:*)",
@@ -10,6 +11,14 @@
       "Bash(uv run pre-commit:*)",
       "Bash(test:*)",
       "Bash(cat:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Write(./.env)",
+      "Edit(./uv.lock)",
+      "Write(./uv.lock)",
+      "Edit(./.git/**)"
     ]
   },
   "hooks": {

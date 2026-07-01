@@ -3,6 +3,8 @@ name = "ai-ready-python-codebase"
 dynamic = ["version"]
 description = "A template python codebase that is designed to be AI first"
 readme = "README.md"
+license = "MIT"                # SPDX expression (PEP 639)
+license-files = ["LICENSE"]
 requires-python = ">=3.12"  # support floor — ruff target-version matches this
 dependencies = [
     "httpx>=0.28",
@@ -14,11 +16,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "hypothesis>=6.120",
-    "mypy>=1.13",
+    "mypy>=2.0",
     "pip-audit>=2.7",
     "pre-commit>=4.0",
     "pytest>=8.3",
-    "pytest-asyncio>=0.24",
+    "pytest-asyncio>=1.0",
     "pytest-cov>=6.0",
     "pytest-xdist>=3.5",
     "respx>=0.22",
@@ -84,6 +86,11 @@ extend-exclude = ["vulture_whitelist.py"]
 #   can hold the whole thing in context and reason about it correctly:
 #   C90 (mccabe C901, threshold below), PLR0912/PLR0915 (branches/statements),
 #   SIM, PLR, PLW (pylint refactor + warnings).
+# Type annotations at edit time — mypy is the authority but runs at commit/CI;
+#   these run in the fast ruff hook so gaps surface as the agent types:
+#   ANN    — every function annotated. ANN401 bans `Any`, which mypy --strict
+#            does NOT: agents reach for `Any` to silence a type they can't work
+#            out, and this is the only check that catches it.
 # Consistency — predictable names + imports so an agent's just-in-time retrieval
 #   lands on the right symbol every time:
 #   I (import order), N (pep8 naming), TID (no relative imports — absolute paths
@@ -103,18 +110,21 @@ extend-exclude = ["vulture_whitelist.py"]
 #   DTZ    — no naive datetimes (a silent, data-corrupting agent mistake).
 # Performance:
 #   PERF   — obvious anti-patterns (manual loops that should be comprehensions).
-# Dead code: F401/F841 above; truly unreachable *functions* are caught by vulture
-#   ([tool.vulture]) — ruff has no equivalent.
+# Dead code — a distinctly AI-authored smell (agents leave the old version behind
+#   after an edit), which pollutes future context:
+#   ERA    — commented-out code. F401/F841 (unused imports/vars) above; truly
+#            unreachable *functions* are caught by vulture ([tool.vulture]).
 select = [
     "E", "F", "I", "UP", "B", "SIM", "RUF", "PTH", "PERF", "S", "ASYNC",
     "A", "C4", "DTZ", "PIE", "RET", "TC", "ARG", "FURB", "TRY", "PLE",
     "PLW", "PLR", "BLE", "C90", "N", "PGH", "PT", "TID", "G", "LOG",
-    "EM", "RSE", "SLF", "FBT", "FLY", "T20",
+    "EM", "RSE", "SLF", "FBT", "FLY", "T20", "ANN", "ERA",
 ]
 # E501 (line length) is the formatter's job, not the linter's. S101 (assert) is
-# fine project-wide: asserts are how tests state intent, and we never ship with
-# `python -O` (which would strip them).
-ignore = ["E501", "S101"]
+# NOT ignored globally: an `assert` in production code silently vanishes under
+# `python -O`, so an agent using one as a runtime guard is a real bug — it's
+# waived only in tests (below), where asserts are how tests state intent.
+ignore = ["E501"]
 
 [tool.ruff.lint.mccabe]
 # C901 — cyclomatic (McCabe) complexity: the number of independent paths through a
@@ -135,10 +145,11 @@ ignore = ["E501", "S101"]
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-# Tests use throwaway "secrets" (S105/S106), accept unused fixture params
-# (ARG001), and compare against literal expected values (PLR2004) — none of which
-# are smells in a test. (S101/assert is already allowed globally above.)
-"tests/**/*.py" = ["S105", "S106", "ARG001", "PLR2004"]
+# Tests assert freely (S101), use throwaway "secrets" (S105/S106), accept unused
+# fixture params (ARG001), compare against literal expected values (PLR2004), and
+# don't need a return annotation on every test function (ANN201) — none of these
+# are smells in a test.
+"tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "PLR2004", "ANN201"]
 # The CLI entry point prints to stdout by design. T201 (no `print`) exists to
 # catch stray debug output in library code — this is the one place print is real.
 "src/ai_ready_python_codebase/__main__.py" = ["T201"]
@@ -166,6 +177,14 @@ enable_error_code = [
     "possibly-undefined",
 ]
 
+[tool.pydantic-mypy]
+# The plugin above is loaded but does nothing until these flags turn it on. They
+# catch the classic agent error of constructing a model with wrong or extra
+# kwargs — checkable statically only with these enabled.
+init_forbid_extra = true          # unknown kwargs to a model are a type error
+init_typed = true                 # __init__ args are checked against field types
+warn_required_dynamic_aliases = true
+
 [tool.vulture]
 # Static dead-code detector — catches unreachable functions/methods that ruff's
 # F401/F841 (unused imports/vars) can't see. `tests/` is scanned alongside `src/`
@@ -180,10 +199,18 @@ min_confidence = 60
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+# Pin the async fixture loop scope explicitly (pytest-asyncio 1.x): silences its
+# every-run DeprecationWarning, which matters now that warnings are errors below.
+asyncio_default_fixture_loop_scope = "function"
 # --strict-markers + --strict-config: an unknown marker or malformed config is a
 # hard error, not a warning an agent scrolls past. -ra prints the reason for every
 # non-pass, giving the agent's verification loop a concrete signal to act on.
 addopts = "-ra -q --strict-markers --strict-config"
+# filterwarnings=error: a DeprecationWarning is the single best free signal that an
+# agent is using an old API (the training-data-bias the UP/FURB rules target) —
+# so make it a failure the agent must fix, not a line it scrolls past. Add
+# targeted "ignore::SomeWarning:pkg" entries here if a dependency forces noise.
+filterwarnings = ["error"]
 # xfail_strict: a test marked xfail that actually PASSES fails the suite — so a
 # bug an agent silently fixed can't keep hiding behind an "expected failure".
 xfail_strict = true

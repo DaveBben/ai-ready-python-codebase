@@ -5,8 +5,8 @@ fast, deterministic feedback loops so they can verify their own work.
 
 What makes it AI-first:
 
-- **`CLAUDE.md` / `AGENTS.md`** — agent instructions in the open standard format
-  (`AGENTS.md` is a symlink to `CLAUDE.md`; other tools read it too). Nested
+- **`AGENTS.md` / `CLAUDE.md`** — agent instructions in the open standard format.
+  `AGENTS.md` is canonical (cross-tool); `CLAUDE.md` is a symlink to it. Nested
   `CLAUDE.md` files add per-directory context on demand.
 - **A strict, opinionated ruff ruleset** — each family chosen to catch a mistake
   agents commonly make; the rationale is commented inline in `pyproject.toml`.

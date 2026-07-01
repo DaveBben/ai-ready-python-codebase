@@ -14,21 +14,26 @@ repos:
       - id: check-merge-conflict
       - id: debug-statements             # no stray breakpoint()/pdb left behind
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.0
-    hooks:
-      - id: ruff          # lint + auto-fix (rules + rationale live in pyproject.toml)
-        args: [--fix]
-      - id: ruff-format   # format
-
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.10.1
     hooks:
       - id: uv-lock       # keep uv.lock in sync with pyproject.toml deps
 
-  # Run through uv so these use the project's pinned versions, not a global tool.
+  # Everything below runs through `uv run`, so pre-commit uses the SAME pinned
+  # tool versions as the editor hook and CI — no "passes in the hook, fails at
+  # commit" skew from a separately-pinned mirror. Single source of truth = uv.lock.
   - repo: local
     hooks:
+      - id: ruff          # lint + auto-fix (rules + rationale live in pyproject.toml)
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format   # format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types: [python]
       - id: mypy          # strict types — the type oracle, too slow for the editor hook
         name: mypy
         entry: uv run mypy src

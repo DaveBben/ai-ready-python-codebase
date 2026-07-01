@@ -3,7 +3,7 @@
 # PostToolUse hook — the AI-first "deterministic guardrail" (research Pillar 3).
 #
 # WHY THIS EXISTS
-#   A rule in CLAUDE.md is advice the model may or may not follow. A hook is
+#   A rule in AGENTS.md is advice the model may or may not follow. A hook is
 #   enforcement the harness runs FOR the model, every time, no matter what — the
 #   model cannot forget it or skip it. Claude Code fires this after every Edit or
 #   Write to a Python file (wired in .claude/settings.json).
@@ -17,14 +17,26 @@
 #      to the agent, which closes the loop: edit → check → correct → re-check.
 #
 #   mypy/pytest are intentionally NOT run here — they need the whole package and
-#   are too slow for an every-keystroke hook. They run in pre-commit and CI, and
-#   are listed in CLAUDE.md's "Before creating a PR" gate.
+#   are too slow for an every-edit hook. They run in pre-commit and CI, and are
+#   listed in AGENTS.md's "Verification loop" gate.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# Claude Code passes the tool call as JSON on stdin. Pull out the edited path.
-# (python3 is guaranteed present in a Python project, so no jq dependency.)
-file="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("tool_input") or {}).get("file_path",""))')"
+root="${CLAUDE_PROJECT_DIR:-.}"
+
+# Prefer the resolved venv binary. Calling ruff directly skips uv's per-invocation
+# environment check — cheap once, but this hook runs on every edit, so three
+# `uv run` calls per edit add up. Fall back to `uv run` if the venv isn't built.
+if [ -x "$root/.venv/bin/ruff" ]; then
+  run_ruff() { "$root/.venv/bin/ruff" "$@"; }
+else
+  run_ruff() { uv run ruff "$@"; }
+fi
+
+# Parse the edited path from Claude Code's stdin JSON. Empty or malformed stdin
+# must NOT error the hook: under `set -e` a failed parse would surface as a
+# spurious hook error to the user, so swallow it and no-op instead.
+file="$(python3 -c 'import json,sys; print((json.load(sys.stdin).get("tool_input") or {}).get("file_path",""))' 2>/dev/null || true)"
 
 # Only act on Python files that still exist (an edit could have been a deletion).
 case "$file" in
@@ -34,11 +46,11 @@ esac
 
 # Step 1: fix what's mechanically fixable, then format. Silence normal output —
 # the agent doesn't need to read successful housekeeping.
-uv run ruff check --fix "$file" >/dev/null 2>&1 || true
-uv run ruff format "$file" >/dev/null 2>&1 || true
+run_ruff check --fix "$file" >/dev/null 2>&1 || true
+run_ruff format "$file" >/dev/null 2>&1 || true
 
 # Step 2: re-check. Surface only what a human/agent must actually decide on.
-if ! output="$(uv run ruff check "$file" 2>&1)"; then
+if ! output="$(run_ruff check "$file" 2>&1)"; then
   echo "ruff found issues in $file that need a real fix (not auto-fixable):" >&2
   echo "$output" >&2
   exit 2

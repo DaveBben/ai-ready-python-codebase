@@ -1,17 +1,41 @@
 name: CI
 
-# The verification gate. This is the same loop an agent runs locally, enforced on
-# every push and PR — the deterministic oracle that keeps AI-authored code honest.
-# Keep these steps identical to CLAUDE.md's "Verification loop" so local == CI.
+# The verification gate. Same loop an agent runs locally, enforced on every push
+# and PR — the deterministic oracle that keeps AI-authored code honest. Keep these
+# steps identical to CLAUDE.md's "Verification loop" so local == CI.
 on: [push, pull_request]
+
+# Least privilege: the default GITHUB_TOKEN is broad; this workflow only reads the
+# repo. Narrows the blast radius if a dependency (or an agent) turns hostile.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref, so a rapid agent push-loop doesn't queue
+# redundant CI.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Test the whole range promised by requires-python (>=3.12), so the
+        # promise is verified, not assumed. 3.14 is stable as of Oct 2025.
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      # Third-party actions are pinned by commit SHA, not a moving tag: a
+      # compromised tag can't then inject code (the #1 GitHub Actions attack).
+      # The version is in the comment; dependabot bumps SHA + comment together.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5
+        with:
+          persist-credentials: false  # don't leave GITHUB_TOKEN in git config
 
-      - uses: astral-sh/setup-uv@v4
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
 
       # --locked fails if uv.lock is stale, so an agent can't quietly drift deps.
       - run: uv sync --locked
@@ -22,10 +46,22 @@ jobs:
 
       - run: uv run mypy src
 
-      # Unreachable/dead functions that ruff's unused-import checks can't see.
+      # Unreachable/dead functions ruff's unused-import checks can't see.
       - run: uv run vulture
 
       # Dependency CVE scan — catches a vulnerable package an agent might add.
       - run: uv run pip-audit
 
       - run: uv run pytest --cov
+
+  # Static analysis of the workflows themselves — catches script injection,
+  # over-broad token permissions, and unpinned actions. zizmor is the de-facto
+  # standard (used by CPython/PyPI). Runs once, independent of the test matrix.
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd  # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+      - run: uvx zizmor --min-severity medium .github/workflows

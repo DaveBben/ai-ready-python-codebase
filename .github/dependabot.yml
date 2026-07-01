@@ -1,0 +1,21 @@
+version: 2
+
+# Dependency + action version automation. Keeping the codebase current is the top
+# enterprise ask for AI-assisted teams (research finding 6): dependabot opens PRs,
+# CI verifies them, and the loop closes without a human polling for CVEs. It also
+# bumps the SHA-pinned actions in ci.yml (with their version comments) for us.
+updates:
+  - package-ecosystem: "uv" # Python deps in pyproject.toml / uv.lock
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions" # pinned action SHAs in workflows
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker" # base image in the Dockerfile
+    directory: "/"
+    schedule:
+      interval: "weekly"
