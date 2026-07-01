@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # ------------------------------------------------------------------------------
 # Runtime stage: Minimal image for production
 # ------------------------------------------------------------------------------
-FROM python:3.13-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 
 # Create non-root user for security
 RUN groupadd --system --gid 1000 app \
