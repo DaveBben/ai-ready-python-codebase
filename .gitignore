@@ -12,3 +12,7 @@ build/
 *.so
 .env
 .DS_Store
+
+# Claude Code: commit .claude/settings.json (shared team config + hooks) but keep
+# each developer's personal overrides local.
+.claude/settings.local.json

@@ -5,6 +5,8 @@
 # ------------------------------------------------------------------------------
 # Build stage: Install dependencies and compile bytecode
 # ------------------------------------------------------------------------------
+# NOTE: the python3.13 tag here and in the runtime stage below must match
+# .python-version. If you bump one, bump both — an agent won't infer the link.
 FROM ghcr.io/astral-sh/uv:0.6-python3.13-bookworm-slim AS builder
 
 WORKDIR /app

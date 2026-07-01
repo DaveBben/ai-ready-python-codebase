@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run vulture:*)",
+      "Bash(uv run pip-audit:*)",
+      "Bash(uv run pre-commit:*)",
+      "Bash(test:*)",
+      "Bash(cat:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/ruff-fix.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

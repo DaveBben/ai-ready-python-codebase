@@ -1,3 +1,7 @@
+# Git-level deterministic guardrail (research Pillar 3). Where the Claude Code
+# PostToolUse hook catches issues as the agent edits, pre-commit is the backstop
+# at commit time — nothing lands in a commit until these pass. Enable once with
+# `uv run pre-commit install`. Pinned revs so the checks are reproducible.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -6,31 +10,32 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
-      - id: check-added-large-files
+      - id: check-added-large-files      # stop an agent committing a huge artifact
       - id: check-merge-conflict
-      - id: debug-statements
+      - id: debug-statements             # no stray breakpoint()/pdb left behind
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.0
     hooks:
-      - id: ruff
+      - id: ruff          # lint + auto-fix (rules + rationale live in pyproject.toml)
         args: [--fix]
-      - id: ruff-format
+      - id: ruff-format   # format
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.10.1
     hooks:
-      - id: uv-lock
+      - id: uv-lock       # keep uv.lock in sync with pyproject.toml deps
 
+  # Run through uv so these use the project's pinned versions, not a global tool.
   - repo: local
     hooks:
-      - id: mypy
+      - id: mypy          # strict types — the type oracle, too slow for the editor hook
         name: mypy
         entry: uv run mypy src
         language: system
         types: [python]
         pass_filenames: false
-      - id: vulture
+      - id: vulture       # unreachable/dead code ruff can't detect
         name: vulture
         entry: uv run vulture
         language: system

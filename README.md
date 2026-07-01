@@ -1,12 +1,28 @@
 # ai-ready-python-codebase
 
-A template python codebase that is designed to be AI first
+A template Python codebase designed to be **AI-first**: it gives coding agents
+fast, deterministic feedback loops so they can verify their own work.
+
+What makes it AI-first:
+
+- **`CLAUDE.md` / `AGENTS.md`** — agent instructions in the open standard format
+  (`AGENTS.md` is a symlink to `CLAUDE.md`; other tools read it too). Nested
+  `CLAUDE.md` files add per-directory context on demand.
+- **A strict, opinionated ruff ruleset** — each family chosen to catch a mistake
+  agents commonly make; the rationale is commented inline in `pyproject.toml`.
+- **mypy `--strict`** plus extra error codes that ban vague `# type: ignore`.
+- **Layered guardrails** — a Claude Code `PostToolUse` hook auto-formats edits,
+  pre-commit gates every commit, and CI enforces the same loop on every PR.
+- **`.env.example`** — a discoverable, committed config contract.
 
 ## Development
 
 ```bash
 # Install dependencies
 uv sync
+
+# Set up local configuration
+cp .env.example .env
 
 # Run tests
 uv run pytest

@@ -3,7 +3,7 @@ name = "ai-ready-python-codebase"
 dynamic = ["version"]
 description = "A template python codebase that is designed to be AI first"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12"  # support floor — ruff target-version matches this
 dependencies = [
     "httpx>=0.28",
     "pydantic>=2.10",
@@ -40,6 +40,10 @@ packages = ["src/ai_ready_python_codebase"]
 path = "src/ai_ready_python_codebase/__init__.py"
 
 [tool.ruff]
+# Lint for the support FLOOR (requires-python = 3.12), not the dev interpreter in
+# .python-version (3.13). This stops agents from emitting 3.13-only syntax that
+# would silently break a 3.12 user — an inconsistency an agent can't infer, so we
+# state it. See CLAUDE.md "Python versions".
 target-version = "py312"
 src = ["src"]
 # vulture_whitelist.py is a vulture data file, not runnable code: it's a list of
@@ -48,33 +52,96 @@ src = ["src"]
 extend-exclude = ["vulture_whitelist.py"]
 
 [tool.ruff.lint]
-# Fail-loud / fail-open enforcement:
-#   BLE   — BLE001 blind `except Exception`. Carve-out: a broad catch is allowed
-#           when it logs the exception (`exc_info=True`) or re-raises, so a
-#           deliberate fail-open catch that still surfaces the error is fine; a
-#           silent swallow is not.
-#   E722  — bare `except:` (E family). S110/S112 — try-except-pass / -continue (S).
-# Concurrency: the ASYNC family covers ASYNC210/ASYNC221 (blocking HTTP/process
-#   calls inside async) and the rest.
-# Simplicity: C90 (mccabe C901, threshold below) plus PLR0912/PLR0915 (PLR) and
-#   the SIM family.
-# Dead code: F401/F841 (unused imports/vars) live in F; truly unreachable
-#   functions are caught by vulture (see [tool.vulture]) — ruff has no equivalent.
-# Unsafe parsing: S301 (pickle), S506 (yaml.load), S324 (weak hashes) are all S.
+# ── Why these rules for an AI-first codebase ─────────────────────────────────
+# Each family turns a mistake agents commonly make into a fast, machine-checkable
+# failure. That is the whole game: a linter is a deterministic oracle Claude can
+# run and self-correct against, without a human in the loop. Grouped by the
+# failure they prevent, not alphabetically, so the intent is legible.
+#
+# Correctness / bugs agents introduce:
+#   E, F   — pycodestyle errors + pyflakes: undefined names, unused imports
+#            (F401), unused vars (F841). The floor.
+#   B      — bugbear: mutable default args, misused loop vars — classic LLM traps.
+#   PLE    — pylint errors: real bugs (bad super() calls, bad string formatting).
+#   RUF, PIE, RET, SIM, C4 — de-duplication: no redundant branches, returns,
+#            comprehensions, or passes left behind after an agent's edits.
+# Modern idioms — counter training-data bias. Agents default to whatever APIs were
+#   most common in their training data, which skews OLD; these push code current:
+#   UP (pyupgrade), FURB (refurb), PTH (pathlib over os.path), FLY (f-strings).
+# Security — agents paste insecure snippets confidently:
+#   S      — bandit: S301 pickle, S506 yaml.load, S324 weak hashes, S603/S607
+#            subprocess. Caught at author time, not in review.
+# Fail-loud error handling — the opposite of a silent agent-written except block:
+#   BLE    — BLE001 blind `except Exception`. Carve-out: allowed when it logs
+#            (`exc_info=True`) or re-raises; a silent swallow is not.
+#   E722   — bare `except:`. S110/S112 — try-except-pass / -continue.
+#   TRY    — tryceratops: raise-and-return anti-patterns, over-broad tries.
+#   EM     — message in a variable so tracebacks read cleanly.
+#   RSE    — `raise ... from` and unneeded parens on raise.
+# Concurrency:
+#   ASYNC  — ASYNC210/221 blocking HTTP/process calls inside async, and friends.
+# Simplicity / complexity budget — keep each function small enough that an agent
+#   can hold the whole thing in context and reason about it correctly:
+#   C90 (mccabe C901, threshold below), PLR0912/PLR0915 (branches/statements),
+#   SIM, PLR, PLW (pylint refactor + warnings).
+# Consistency — predictable names + imports so an agent's just-in-time retrieval
+#   lands on the right symbol every time:
+#   I (import order), N (pep8 naming), TID (no relative imports — absolute paths
+#   are unambiguous to an agent), A (don't shadow builtins).
+# No lazy suppression — stop agents silencing the very checks above:
+#   PGH    — PGH004 bans blanket `# noqa`; PGH003 bans blanket `# type: ignore`
+#            (a code is required). Every suppression stays visible and reviewable.
+# Logging correctness — structured logs must stay machine-parseable:
+#   G, LOG — no f-strings/`%`/`.format` inside log calls; correct logging usage.
+# API clarity + no stray output:
+#   FBT    — no boolean-trap positional args (an agent reading `f(True)` can't
+#            tell what it means); ARG — no unused arguments; SLF — no reaching
+#            into private members; T20 — no stray `print` debug output.
+# Tests:
+#   PT     — flake8-pytest-style: uniform fixtures/asserts so test files read alike.
+# Time correctness:
+#   DTZ    — no naive datetimes (a silent, data-corrupting agent mistake).
+# Performance:
+#   PERF   — obvious anti-patterns (manual loops that should be comprehensions).
+# Dead code: F401/F841 above; truly unreachable *functions* are caught by vulture
+#   ([tool.vulture]) — ruff has no equivalent.
 select = [
     "E", "F", "I", "UP", "B", "SIM", "RUF", "PTH", "PERF", "S", "ASYNC",
-    "A", "C4", "DTZ", "PIE", "RET", "TCH", "ARG", "FURB", "TRY", "PLR",
-    "BLE", "C90",
+    "A", "C4", "DTZ", "PIE", "RET", "TC", "ARG", "FURB", "TRY", "PLE",
+    "PLW", "PLR", "BLE", "C90", "N", "PGH", "PT", "TID", "G", "LOG",
+    "EM", "RSE", "SLF", "FBT", "FLY", "T20",
 ]
+# E501 (line length) is the formatter's job, not the linter's. S101 (assert) is
+# fine project-wide: asserts are how tests state intent, and we never ship with
+# `python -O` (which would strip them).
 ignore = ["E501", "S101"]
 
 [tool.ruff.lint.mccabe]
-# C901: flag functions whose cyclomatic complexity exceeds this. 10 is the
-# conventional default — raise it deliberately if a project needs the headroom.
+# C901 — cyclomatic (McCabe) complexity: the number of independent paths through a
+# function (+1 per if/elif/for/while/except and per `and`/`or`). It's a proxy for
+# "how much must you hold in your head to be sure this function is correct."
+#
+# Why it's an AI-first lever: an agent reasons over what fits in its context. A
+# 30-path function is where agents quietly introduce a bug in a branch they never
+# fully traced. Capping complexity forces small, single-purpose functions the
+# agent can read, test exhaustively, and modify safely.
+#
+# 10 is McCabe's original threshold and the conventional default. Drop to 8 for a
+# stricter agent-friendly ceiling; going much lower backfires — it forces
+# premature decomposition, and more tiny functions across more files means MORE
+# for an agent to trace, not less. Complementary caps come from the PLR family
+# (selected above): PLR0912 branches, PLR0915 statements, PLR0913 arguments — all
+# at their defaults; tune them here if a project needs different limits.
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "PLR2004"]
+# Tests use throwaway "secrets" (S105/S106), accept unused fixture params
+# (ARG001), and compare against literal expected values (PLR2004) — none of which
+# are smells in a test. (S101/assert is already allowed globally above.)
+"tests/**/*.py" = ["S105", "S106", "ARG001", "PLR2004"]
+# The CLI entry point prints to stdout by design. T201 (no `print`) exists to
+# catch stray debug output in library code — this is the one place print is real.
+"src/ai_ready_python_codebase/__main__.py" = ["T201"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["ai_ready_python_codebase"]
@@ -83,6 +150,21 @@ known-first-party = ["ai_ready_python_codebase"]
 mypy_path = "src"
 strict = true
 plugins = ["pydantic.mypy"]
+# Beyond --strict, surface the mistakes agents make most and can't see alone:
+#   warn_unreachable      — dead branch after a type narrows (often an agent bug).
+#   ignore-without-code   — a bare `# type: ignore` is banned; it must name the
+#                           error code. Pairs with ruff PGH003 so suppressions
+#                           stay specific and reviewable, never a blanket mute.
+#   redundant-expr        — always-true/dead sub-expressions.
+#   truthy-bool           — `if some_object:` where the object is always truthy.
+#   possibly-undefined    — a var defined on only some branches.
+warn_unreachable = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+    "possibly-undefined",
+]
 
 [tool.vulture]
 # Static dead-code detector — catches unreachable functions/methods that ruff's
@@ -98,7 +180,13 @@ min_confidence = 60
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
-addopts = "-ra -q --strict-markers"
+# --strict-markers + --strict-config: an unknown marker or malformed config is a
+# hard error, not a warning an agent scrolls past. -ra prints the reason for every
+# non-pass, giving the agent's verification loop a concrete signal to act on.
+addopts = "-ra -q --strict-markers --strict-config"
+# xfail_strict: a test marked xfail that actually PASSES fails the suite — so a
+# bug an agent silently fixed can't keep hiding behind an "expected failure".
+xfail_strict = true
 markers = ["slow", "integration"]
 
 [tool.coverage.run]
@@ -106,6 +194,12 @@ source = ["src"]
 branch = true
 
 [tool.coverage.report]
+# show_missing lists the exact unexecuted line numbers, so "did the agent test
+# what it wrote?" becomes a precise, actionable readout rather than a percentage.
+show_missing = true
+# Set a floor once the project has real code, e.g. `fail_under = 80`, to make
+# coverage a hard CI gate instead of a judgment call. Left off in the template so
+# the starter suite doesn't fail an empty project.
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
