@@ -1,0 +1,113 @@
+[project]
+name = "ai-ready-python-codebase"
+dynamic = ["version"]
+description = "A template python codebase that is designed to be AI first"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.120",
+    "mypy>=1.13",
+    "pip-audit>=2.7",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "pytest-xdist>=3.5",
+    "respx>=0.22",
+    "ruff>=0.8",
+    "vulture>=2.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+ai-ready-python-codebase = "ai_ready_python_codebase.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_ready_python_codebase"]
+
+[tool.hatch.version]
+path = "src/ai_ready_python_codebase/__init__.py"
+
+[tool.ruff]
+target-version = "py312"
+src = ["src"]
+# vulture_whitelist.py is a vulture data file, not runnable code: it's a list of
+# bare names (undefined, "useless" expressions) that vulture reads as fake uses.
+# Linting it would only ever produce F821/B018 noise, so keep ruff out of it.
+extend-exclude = ["vulture_whitelist.py"]
+
+[tool.ruff.lint]
+# Fail-loud / fail-open enforcement:
+#   BLE   — BLE001 blind `except Exception`. Carve-out: a broad catch is allowed
+#           when it logs the exception (`exc_info=True`) or re-raises, so a
+#           deliberate fail-open catch that still surfaces the error is fine; a
+#           silent swallow is not.
+#   E722  — bare `except:` (E family). S110/S112 — try-except-pass / -continue (S).
+# Concurrency: the ASYNC family covers ASYNC210/ASYNC221 (blocking HTTP/process
+#   calls inside async) and the rest.
+# Simplicity: C90 (mccabe C901, threshold below) plus PLR0912/PLR0915 (PLR) and
+#   the SIM family.
+# Dead code: F401/F841 (unused imports/vars) live in F; truly unreachable
+#   functions are caught by vulture (see [tool.vulture]) — ruff has no equivalent.
+# Unsafe parsing: S301 (pickle), S506 (yaml.load), S324 (weak hashes) are all S.
+select = [
+    "E", "F", "I", "UP", "B", "SIM", "RUF", "PTH", "PERF", "S", "ASYNC",
+    "A", "C4", "DTZ", "PIE", "RET", "TCH", "ARG", "FURB", "TRY", "PLR",
+    "BLE", "C90",
+]
+ignore = ["E501", "S101"]
+
+[tool.ruff.lint.mccabe]
+# C901: flag functions whose cyclomatic complexity exceeds this. 10 is the
+# conventional default — raise it deliberately if a project needs the headroom.
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "PLR2004"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["ai_ready_python_codebase"]
+
+[tool.mypy]
+mypy_path = "src"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.vulture]
+# Static dead-code detector — catches unreachable functions/methods that ruff's
+# F401/F841 (unused imports/vars) can't see. `tests/` is scanned alongside `src/`
+# so a public API exercised only by tests isn't mistaken for dead code; pytest
+# fixtures (called by name via injection, never directly) are excused by their
+# decorator. Genuinely-invisible pydantic runtime names live in the whitelist.
+paths = ["src", "tests", "vulture_whitelist.py"]
+ignore_decorators = ["@pytest.fixture"]
+min_confidence = 60
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+addopts = "-ra -q --strict-markers"
+markers = ["slow", "integration"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
