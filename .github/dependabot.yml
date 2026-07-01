@@ -15,7 +15,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  - package-ecosystem: "docker" # base image in the Dockerfile
+  - package-ecosystem: "npm" # the pinned AWS CDK CLI in package.json
     directory: "/"
     schedule:
       interval: "weekly"

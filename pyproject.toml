@@ -1,39 +1,45 @@
 [project]
 name = "ai-ready-python-codebase"
 dynamic = ["version"]
-description = "A template python codebase that is designed to be AI first"
+description = "AI-first AWS CDK template that deploys a Hello World Lambda"
 readme = "README.md"
 license = "MIT"                # SPDX expression (PEP 639)
 license-files = ["LICENSE"]
 requires-python = ">=3.12"  # support floor — ruff target-version matches this
+# ── Runtime deps: the infrastructure-as-code libraries ───────────────────────
 dependencies = [
-    "httpx>=0.28",
-    "pydantic>=2.10",
-    "pydantic-settings>=2.6",
-    "structlog>=24.4",
+    # AWS CDK v2 — core framework plus every L1/L2 construct library in ONE
+    # package (the v1 per-service packages are end-of-life). This is the whole
+    # infrastructure surface, expressed as typed Python.
+    "aws-cdk-lib>=2.260",
+    # cdk-nag — a synth-time security/best-practice oracle (AwsSolutions rule pack)
+    # that runs as a CDK Aspect: deterministic, needs no AWS account, fails the
+    # build on insecure infra. The infrastructure equivalent of the ruff/mypy gate.
+    # Capped <3: cdk-nag 3.0.x has an Aspects-API regression that breaks against
+    # current aws-cdk-lib ("aspect.visit is not a function"); 2.9.x is the latest
+    # working line. Lift the cap once 3.x is fixed — the nag test will catch it.
+    "cdk-nag>=2.9.7,<3",
+    # The base Construct programming model CDK is built on; a peer dependency of
+    # aws-cdk-lib that AWS recommends declaring explicitly so its version is pinned.
+    "constructs>=10.4",
 ]
 
 [dependency-groups]
+# ── Dev-only deps: the verification tools an agent runs to check its own work ─
 dev = [
-    "hypothesis>=6.120",
-    "mypy>=2.0",
-    "pip-audit>=2.7",
-    "pre-commit>=4.0",
-    "pytest>=8.3",
-    "pytest-asyncio>=1.0",
-    "pytest-cov>=6.0",
-    "pytest-xdist>=3.5",
-    "respx>=0.22",
-    "ruff>=0.8",
-    "vulture>=2.14",
+    "mypy>=2.0",         # strict static type checker — the type oracle ([tool.mypy])
+    "pip-audit>=2.7",    # scans deps against the PyPI CVE advisory DB (supply-chain)
+    "pre-commit>=4.0",   # git-hook framework running the commit-time guardrails
+    "pytest>=8.3",       # test runner — the primary verification oracle
+    "pytest-cov>=6.0",   # coverage: did the agent test the synth output it wrote?
+    "pytest-xdist>=3.5", # parallel test execution — a faster feedback loop
+    "ruff>=0.8",         # fast lint + format; the edit-time oracle in the hook
+    "vulture>=2.14",     # dead-code detector for unreachable funcs ruff can't see
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[project.scripts]
-ai-ready-python-codebase = "ai_ready_python_codebase.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_ready_python_codebase"]
@@ -51,7 +57,8 @@ src = ["src"]
 # vulture_whitelist.py is a vulture data file, not runnable code: it's a list of
 # bare names (undefined, "useless" expressions) that vulture reads as fake uses.
 # Linting it would only ever produce F821/B018 noise, so keep ruff out of it.
-extend-exclude = ["vulture_whitelist.py"]
+# cdk.out is generated synth output (CloudFormation + copied assets) — never lint it.
+extend-exclude = ["vulture_whitelist.py", "cdk.out"]
 
 [tool.ruff.lint]
 # ── Why these rules for an AI-first codebase ─────────────────────────────────
@@ -150,9 +157,10 @@ max-complexity = 10
 # don't need a return annotation on every test function (ANN201) — none of these
 # are smells in a test.
 "tests/**/*.py" = ["S101", "S105", "S106", "ARG001", "PLR2004", "ANN201"]
-# The CLI entry point prints to stdout by design. T201 (no `print`) exists to
-# catch stray debug output in library code — this is the one place print is real.
-"src/ai_ready_python_codebase/__main__.py" = ["T201"]
+# Lambda handlers legitimately `print` to CloudWatch (T201) and must accept the
+# AWS-supplied `event`/`context` params even when unused (ARG001). Neither is a
+# smell here — this is the one place a bare print is the intended interface.
+"src/ai_ready_python_codebase/lambdas/**/*.py" = ["T201", "ARG001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["ai_ready_python_codebase"]
@@ -160,7 +168,6 @@ known-first-party = ["ai_ready_python_codebase"]
 [tool.mypy]
 mypy_path = "src"
 strict = true
-plugins = ["pydantic.mypy"]
 # Beyond --strict, surface the mistakes agents make most and can't see alone:
 #   warn_unreachable      — dead branch after a type narrows (often an agent bug).
 #   ignore-without-code   — a bare `# type: ignore` is banned; it must name the
@@ -177,20 +184,13 @@ enable_error_code = [
     "possibly-undefined",
 ]
 
-[tool.pydantic-mypy]
-# The plugin above is loaded but does nothing until these flags turn it on. They
-# catch the classic agent error of constructing a model with wrong or extra
-# kwargs — checkable statically only with these enabled.
-init_forbid_extra = true          # unknown kwargs to a model are a type error
-init_typed = true                 # __init__ args are checked against field types
-warn_required_dynamic_aliases = true
-
 [tool.vulture]
 # Static dead-code detector — catches unreachable functions/methods that ruff's
 # F401/F841 (unused imports/vars) can't see. `tests/` is scanned alongside `src/`
 # so a public API exercised only by tests isn't mistaken for dead code; pytest
 # fixtures (called by name via injection, never directly) are excused by their
-# decorator. Genuinely-invisible pydantic runtime names live in the whitelist.
+# decorator. Names invoked only by string (the Lambda `handler`, referenced as
+# "index.handler" in CDK) live in the whitelist.
 paths = ["src", "tests", "vulture_whitelist.py"]
 ignore_decorators = ["@pytest.fixture"]
 min_confidence = 60
@@ -198,10 +198,6 @@ min_confidence = 60
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-asyncio_mode = "auto"
-# Pin the async fixture loop scope explicitly (pytest-asyncio 1.x): silences its
-# every-run DeprecationWarning, which matters now that warnings are errors below.
-asyncio_default_fixture_loop_scope = "function"
 # --strict-markers + --strict-config: an unknown marker or malformed config is a
 # hard error, not a warning an agent scrolls past. -ra prints the reason for every
 # non-pass, giving the agent's verification loop a concrete signal to act on.

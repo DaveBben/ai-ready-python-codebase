@@ -13,6 +13,13 @@ build/
 .env
 .DS_Store
 
+# AWS CDK: synth output and staging are generated; node_modules holds the pinned
+# CDK CLI installed by `npm ci`. (cdk.context.json IS committed — it caches
+# account-specific lookups and must be shared.)
+cdk.out/
+.cdk.staging/
+node_modules/
+
 # Claude Code: commit .claude/settings.json (shared team config + hooks) but keep
 # each developer's personal overrides local.
 .claude/settings.local.json

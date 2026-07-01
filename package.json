@@ -1,0 +1,9 @@
+{
+  "name": "ai-ready-python-codebase-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pins the Node-based AWS CDK CLI used for `cdk deploy`. All application code is Python (see pyproject.toml); this file exists only because the CDK CLI ships as an npm package. Run `npm ci` before deploying; CI does not need it (synth runs via `python app.py`).",
+  "devDependencies": {
+    "aws-cdk": "2.1129.0"
+  }
+}

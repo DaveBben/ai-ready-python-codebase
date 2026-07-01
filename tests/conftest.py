@@ -1,31 +1,20 @@
-"""Pytest fixtures for ai_ready_python_codebase tests.
+"""Pytest fixtures for the CDK tests."""
 
-Fixtures here return the *real* types the app uses, not stand-in dicts, so an
-agent copying a pattern from a test can't drift away from the actual API.
-"""
-
+import aws_cdk as cdk
 import pytest
+from aws_cdk.assertions import Template
 
-from ai_ready_python_codebase.config import Settings
-
-
-@pytest.fixture
-def settings() -> Settings:
-    """A Settings instance with test-friendly overrides.
-
-    Returns the real Settings type (not a dict) with quiet, human-readable
-    logging, so tests exercise the same object the application constructs.
-    """
-    return Settings(log_level="DEBUG", log_json=False)
+from ai_ready_python_codebase.hello_stack import HelloStack
 
 
 @pytest.fixture
-def env_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
-    """Settings loaded from patched environment variables.
+def template() -> Template:
+    """Synthesize HelloStack and return its CloudFormation template for assertions.
 
-    Demonstrates the intended override path: set env vars, then let
-    pydantic-settings read them — the same way the app does in production.
+    Synthesis runs in-process — no AWS credentials and no CDK CLI (though a local
+    Node.js runtime is required, since CDK Python calls into jsii) — so these
+    tests are a fast, hermetic verification oracle the agent can run on every edit.
     """
-    monkeypatch.setenv("LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("LOG_JSON", "false")
-    return Settings()
+    app = cdk.App()
+    stack = HelloStack(app, "TestStack")
+    return Template.from_stack(stack)

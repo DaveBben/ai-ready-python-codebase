@@ -37,14 +37,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # CDK Python runs on jsii, which needs a Node.js runtime (this is NOT the
+      # aws-cdk CLI — synth/tests use aws-cdk-lib directly). Required for pytest.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version: "22"
+
       # --locked fails if uv.lock is stale, so an agent can't quietly drift deps.
       - run: uv sync --locked
+
+      # Install the pinned CDK CLI (package-lock.json) for the authoritative synth.
+      - run: npm ci
 
       - run: uv run ruff check .
 
       - run: uv run ruff format --check .
 
-      - run: uv run mypy src
+      - run: uv run mypy src app.py
 
       # Unreachable/dead functions ruff's unused-import checks can't see.
       - run: uv run vulture
@@ -53,6 +62,11 @@ jobs:
       - run: uv run pip-audit
 
       - run: uv run pytest --cov
+
+      # Authoritative synth with the pinned CDK CLI: reads cdk.json (context +
+      # feature flags) and runs the cdk-nag Aspect, so it matches what `cdk deploy`
+      # produces and fails on any unsuppressed nag finding — before it reaches AWS.
+      - run: npx cdk synth -q
 
   # Static analysis of the workflows themselves — catches script injection,
   # over-broad token permissions, and unpinned actions. zizmor is the de-facto

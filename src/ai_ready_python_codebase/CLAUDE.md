@@ -1,40 +1,43 @@
 # Package conventions
 
-Loads when you edit files in this package. Root `CLAUDE.md` has project-wide
-rules; this file has the patterns specific to `ai_ready_python_codebase`.
+Loads when you edit files in this package. Root `AGENTS.md` has project-wide
+rules; this file has the CDK patterns specific to `ai_ready_python_codebase`.
 
-## Logging
+## Layout
 
-- Get a logger with `get_logger(__name__)` from `logger.py`. Do not call
-  `logging.getLogger` directly, and do not `print` (except in `__main__.py`).
-- Pass event data as **structured key-values**, not interpolated strings:
-  - Good: `log.info("user_fetched", user_id=uid, ms=elapsed)`
-  - Bad: `log.info(f"fetched user {uid}")` — the linter (G/LOG) rejects this; it
-    breaks JSON log parsing.
+- `hello_lambda.py` — a **construct** (`HelloLambda`): a reusable logical unit
+  (the Lambda plus its log group). Infrastructure belongs in constructs.
+- `hello_stack.py` — a **stack** (`HelloStack`): a deployment unit that composes
+  constructs. Stacks wire things together; they don't define low-level resources.
+- `lambdas/<name>/index.py` — Lambda **handler code**, bundled as a deploy asset.
+- As the app grows, group constructs under `constructs/` and stacks under
+  `stacks/`; keep `app.py` (repo root) a thin orchestrator.
 
-## Configuration
+## Constructs and stacks
 
-- Add settings as typed fields on `Settings` in `config.py`. They load from env
-  vars automatically (pydantic-settings), uppercased (`log_level` ← `LOG_LEVEL`).
-- Mirror every new field in `.env.example` with a comment. That file is the
-  discoverable config contract; keep it in sync.
+- Put every resource in a Construct, not directly in a Stack. AWS best practice:
+  constructs are the reusable units, stacks are deployment boundaries.
+- Lambda functions: use ARM64, set an explicit `LogGroup` with a retention and
+  `RemovalPolicy` (the auto-created log group is unmanaged and never expires),
+  and let the L2 `Function` construct build the standard basic-execution role
+  (cdk-nag flags its AWS-managed policy as IAM4 — suppress with a reason, as
+  `hello_lambda.py` does, or scope the role yourself).
+- Don't hardcode account/region in a stack; accept `env` and pass it from `app.py`.
 
-## Errors
+## Lambda handler code (`lambdas/`)
 
-- Raise a subclass of `AiReadyPythonCodebaseError` (see `exceptions.py`); add a
-  new subclass rather than raising bare `ValueError`/`Exception`.
-- A broad `except Exception` is allowed **only** if it logs with `exc_info=True`
-  or re-raises. A silent swallow fails the BLE/TRY lint rules.
+- Handlers run in the AWS runtime, NOT as part of this package: keep them
+  self-contained (stdlib only unless you bundle deps). Never import from
+  `ai_ready_python_codebase` — that code isn't in the Lambda zip.
+- `print` is the intended interface to CloudWatch here (T201 is waived for
+  `lambdas/`); `event`/`context` may be unused (ARG001 waived). Type them with
+  `object`, never `Any` (ANN401).
 
-## HTTP
+## Tests
 
-- Use `httpx` (already a dependency). Prefer `httpx.AsyncClient` for I/O; the
-  ASYNC lint rules flag blocking calls inside `async` functions.
-- Tests mock HTTP with `respx` — do not make real network calls in tests.
-
-## Tests for this package
-
-- Put tests under `tests/`, mirroring the module path.
-- Type your test functions too (mypy strict covers tests).
-- Use `hypothesis` for functions with an invariant worth stressing (e.g.
-  round-trips, idempotence) — it finds the edge case a hand-written example won't.
+- Assert on synthesized templates with `aws_cdk.assertions.Template`. Synthesis
+  is in-process, so tests need no AWS credentials and no CDK CLI (a Node.js
+  runtime is still required — CDK Python calls into jsii).
+- Prefer fine-grained assertions (`has_resource_properties`) over snapshots, so
+  each test states exactly which property matters and why.
+- Unit-test handler code directly (see `tests/test_handler.py`).

@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run CLI",
+            "name": "Synthesize (app.py)",
             "type": "debugpy",
             "request": "launch",
-            "module": "ai_ready_python_codebase",
+            "program": "${workspaceFolder}/app.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceFolder}"

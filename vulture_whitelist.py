@@ -9,6 +9,11 @@
 #
 # Functions/methods used only by tests are NOT whitelisted here — `tests/` is in
 # the scan path, so those references count as real uses and vulture resolves
-# them on its own. This list is for names no Python call site ever references:
-
-model_config  # pydantic-settings reads this at runtime; no call site touches it
+# them on its own. (The Lambda `handler` is invoked only by the string
+# "index.handler" in CDK, but test_handler.py calls it, so vulture sees it used.)
+#
+# This list is for names no Python call site ever references. The AWS Lambda
+# runtime passes `event` and `context` positionally; a hello-world handler reads
+# neither, but both must stay in the signature — so they look dead but aren't.
+event
+context

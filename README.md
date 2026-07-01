@@ -1,7 +1,8 @@
-# ai-ready-python-codebase
+# ai-ready-python-codebase (AWS CDK)
 
-A template Python codebase designed to be **AI-first**: it gives coding agents
-fast, deterministic feedback loops so they can verify their own work.
+An **AWS CDK** app (Python) that deploys a Hello World Lambda — built as an
+**AI-first** template: it gives coding agents fast, deterministic feedback loops
+so they can verify their own infrastructure changes.
 
 What makes it AI-first:
 
@@ -11,41 +12,46 @@ What makes it AI-first:
 - **A strict, opinionated ruff ruleset** — each family chosen to catch a mistake
   agents commonly make; the rationale is commented inline in `pyproject.toml`.
 - **mypy `--strict`** plus extra error codes that ban vague `# type: ignore`.
+- **In-process synth tests** — `aws_cdk.assertions` verify the generated
+  CloudFormation with no AWS account and no CDK CLI (a local Node.js runtime is
+  needed — CDK's jsii core), so the loop stays fast.
+- **cdk-nag security oracle** — the AwsSolutions rule pack runs as a synth-time
+  Aspect, so an insecure change fails the build like a lint error would.
 - **Layered guardrails** — a Claude Code `PostToolUse` hook auto-formats edits,
   pre-commit gates every commit, and CI enforces the same loop on every PR.
-- **`.env.example`** — a discoverable, committed config contract.
 
-## Development
+## What it deploys
+
+`HelloStack` → a Python 3.14 Lambda on ARM64 that prints "Hello World", with an
+explicit CloudWatch log group (one-week retention) and the standard
+AWS-managed basic-execution role.
+
+## Develop
 
 ```bash
-# Install dependencies
-uv sync
-
-# Set up local configuration
-cp .env.example .env
-
-# Run tests
-uv run pytest
-
-# Run tests with coverage
-uv run pytest --cov
-
-# Type checking
-uv run mypy src
-
-# Linting and formatting
-uv run ruff check src tests
-uv run ruff format src tests
-
-# Run the CLI
-uv run ai-ready-python-codebase
-
-# Install pre-commit hooks
-uv run pre-commit install
+uv sync                       # install Python deps
+uv run pytest --cov           # run tests (synth runs in-process — no AWS needed)
+uv run mypy src app.py        # strict type check
+uv run ruff check . && uv run ruff format .
+uv run python app.py          # quick synth smoke test (runs cdk-nag)
+npm ci && npx cdk synth       # authoritative synth (reads cdk.json)
+uv run pre-commit install     # enable commit-time guardrails (one time)
 ```
 
-## Before Creating PR
+## Deploy
+
+The CDK CLI is Node-based (pinned in `package.json`); everything else is Python.
 
 ```bash
-uv run ruff check src && uv run mypy src && uv run pytest
+npm ci                        # install the pinned cdk CLI
+npx cdk bootstrap             # once per account/region
+npx cdk deploy                # needs AWS credentials
+```
+
+## Before creating a PR
+
+```bash
+uv run ruff check . && uv run ruff format --check . \
+  && uv run mypy src app.py && uv run vulture \
+  && uv run pytest --cov && uv run python app.py
 ```

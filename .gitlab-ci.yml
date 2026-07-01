@@ -3,16 +3,20 @@
 # local == CI on either host. Keep all three in sync when you change the gate.
 
 default:
-  # uv's base image (uv on Debian slim); the interpreter is installed per matrix
-  # job below, which keeps this robust even for brand-new Python releases. The uv
-  # download cache is reused across runs, keyed on the lockfile.
-  image: ghcr.io/astral-sh/uv:bookworm-slim
+  # CDK Python runs on jsii, which needs a Node.js runtime — so start from a Node
+  # image and add uv (rather than the reverse). uv installs the Python interpreter
+  # per matrix job. Cache the uv download dir, keyed on the lockfile.
+  image: node:22-bookworm-slim
   cache:
     key:
       files:
         - uv.lock
     paths:
       - .cache/uv
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates
+    - curl -LsSf https://astral.sh/uv/install.sh | sh
+    - export PATH="$HOME/.local/bin:$PATH"
 
 variables:
   UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
@@ -32,12 +36,14 @@ verify:
     - uv python install "$PYTHON_VERSION"
     # --locked fails if uv.lock is stale, so an agent can't quietly drift deps.
     - uv sync --locked --python "$PYTHON_VERSION"
+    - npm ci # pinned CDK CLI for the authoritative synth below
     - uv run ruff check .
     - uv run ruff format --check .
-    - uv run mypy src
+    - uv run mypy src app.py
     - uv run vulture # unreachable/dead functions ruff can't see
     - uv run pip-audit # dependency CVE scan
-    - uv run pytest --cov
+    - uv run pytest --cov # jsii uses the Node runtime from the base image
+    - npx cdk synth -q # authoritative synth: reads cdk.json + runs cdk-nag
 
 # Note: the GitHub workflow also runs `zizmor` to lint its Actions files — that
 # scanner is Actions-specific, so it has no equivalent here. GitLab teams wanting

@@ -24,19 +24,22 @@ repos:
   # commit" skew from a separately-pinned mirror. Single source of truth = uv.lock.
   - repo: local
     hooks:
+      # --force-exclude: pre-commit passes explicit file paths, and ruff ignores
+      # `extend-exclude` for explicitly-listed files unless forced — without this,
+      # vulture_whitelist.py (excluded in pyproject) gets linted and fails F821.
       - id: ruff          # lint + auto-fix (rules + rationale live in pyproject.toml)
         name: ruff
-        entry: uv run ruff check --fix
+        entry: uv run ruff check --fix --force-exclude
         language: system
         types: [python]
       - id: ruff-format   # format
         name: ruff-format
-        entry: uv run ruff format
+        entry: uv run ruff format --force-exclude
         language: system
         types: [python]
       - id: mypy          # strict types — the type oracle, too slow for the editor hook
         name: mypy
-        entry: uv run mypy src
+        entry: uv run mypy src app.py
         language: system
         types: [python]
         pass_filenames: false

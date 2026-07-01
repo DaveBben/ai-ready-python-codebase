@@ -11,61 +11,72 @@ that load only when you touch that directory.
 
 ## Project overview
 
-A template Python codebase designed to be AI-first: fast, deterministic feedback
-loops (lint, types, tests, hooks) that let an agent verify its own work.
+An AWS CDK (Python) app that deploys a Hello World Lambda — built as an AI-first
+template: the same fast, deterministic feedback loops (lint, types, tests, hooks)
+as the base Python template, applied to infrastructure-as-code so an agent can
+verify its own CDK changes without an AWS account.
 
 ## Golden rules
 
-- **Use `uv` for everything.** Never call `pip`, `poetry`, `python -m venv`, or a
-  global `python` directly. Dependencies: `uv add` / `uv add --dev`, never edit
-  `pyproject.toml` deps by hand. This keeps `uv.lock` authoritative.
-- **Every function is fully type-annotated.** mypy runs in `--strict`; untyped
-  code fails. No bare `# type: ignore` — cite the error code.
-- **Fail loud.** Raise a subclass of `AiReadyPythonCodebaseError`; never swallow
-  an exception silently (the linter enforces this — see BLE/TRY in pyproject).
-- **Run the checks; don't just trust the diff.** After a change, run the
-  verification loop below. Listing a command is not running it.
+- **Use `uv` for Python, `npm` for the CDK CLI.** Never call `pip`/`poetry`/a
+  global `python`. Dependencies: `uv add` / `uv add --dev`, never hand-edit
+  `pyproject.toml` deps. The Node-based `cdk` CLI is pinned in `package.json`.
+- **Every function is fully type-annotated.** mypy runs `--strict`; untyped code
+  fails. No bare `# type: ignore` (cite the code), and no `Any` (ANN401).
+- **Infrastructure goes in constructs, not stacks.** A stack composes constructs;
+  it doesn't define low-level resources. Don't hardcode account/region — take
+  `env` and pass it from `app.py`.
+- **Lambda handlers are self-contained.** They run in the AWS runtime, so never
+  import from `ai_ready_python_codebase`; stdlib only unless you bundle deps.
+- **Run the checks; don't just trust the diff.** Listing a command is not running
+  it — run the verification loop below.
 
 ## Development commands
 
 ```bash
-uv sync                      # install deps (including dev group)
-uv run ai-ready-python-codebase   # run the CLI
-uv run pytest                # all tests
-uv run pytest path::test     # a single test
-uv run pytest --cov          # tests with coverage
-uv run mypy src              # strict type check
-uv run ruff check src tests  # lint
-uv run ruff format src tests # format
-uv run pre-commit install    # enable git-commit guardrails (one time)
+uv sync                       # install Python deps (incl. dev group)
+npm ci                        # install the pinned CDK CLI (for cdk synth/deploy)
+uv run pytest                 # all tests (synth runs in-process — no AWS needed)
+uv run pytest path::test      # a single test
+uv run pytest --cov           # tests with coverage
+uv run mypy src app.py        # strict type check (include the app entry point)
+uv run ruff check .           # lint
+uv run ruff format .          # format
+uv run python app.py          # quick synth smoke test (runs cdk-nag; ignores cdk.json)
+npx cdk synth                 # authoritative synth: reads cdk.json, runs cdk-nag
+npx cdk deploy                # deploy (needs AWS credentials)
 ```
 
 ## Tech stack (pinned — do not assume newer/older APIs)
 
-- **Python**: dev on 3.13; supported floor is 3.12 (`requires-python`). Ruff
-  lints against 3.12, so don't emit 3.13-only syntax.
-- **httpx** ≥0.28 — async HTTP client (do not add `requests`).
-- **pydantic** ≥2.10 / **pydantic-settings** ≥2.6 — models and config.
-- **structlog** ≥24.4 — structured logging (see logger.py).
+- **Python**: dev on 3.13; floor is 3.12 (`requires-python`). Ruff lints against
+  3.12 — don't emit 3.13-only syntax.
+- **aws-cdk-lib** ≥2.260 + **constructs** ≥10.4 — CDK v2 (one package; v1 is EOL).
+- **cdk-nag** <3 — the synth-time security oracle. When it flags something, fix it
+  or suppress WITH a written justification (see hello_lambda.py); never blanket it.
+- **Lambda runtime**: Python 3.14 (latest) on ARM64.
+- **Node.js** — required even to run tests/synth: CDK Python calls into a Node
+  runtime via jsii. (The **cdk** CLI, npm, is separate — needed only to deploy.)
 - Tooling: **uv**, **ruff**, **mypy**, **pytest**, **vulture**.
 
 ## Project structure
 
-- `src/ai_ready_python_codebase/` — the package (src layout; import absolutely as
-  `from ai_ready_python_codebase... import ...`, never relative).
-  - `config.py` — `Settings` (env-driven). Mirror new settings in `.env.example`.
-  - `logger.py` — logging setup; get a logger with `get_logger(__name__)`.
-  - `exceptions.py` — exception hierarchy rooted at `AiReadyPythonCodebaseError`.
-  - `__main__.py` — CLI entry point.
-- `tests/` — pytest suite; `conftest.py` holds fixtures.
+- `app.py` — CDK entry point (thin orchestrator: compose stacks, `app.synth()`).
+- `cdk.json` — tells the CDK CLI how to run the app (`uv run python app.py`).
+- `src/ai_ready_python_codebase/` — the package (import absolutely, never relative).
+  - `hello_lambda.py` — `HelloLambda` construct (the Lambda + its log group).
+  - `hello_stack.py` — `HelloStack` stack (composes constructs).
+  - `lambdas/hello/index.py` — the Lambda handler (bundled as a deploy asset).
+- `tests/` — pytest suite; `conftest.py` holds the synthesized-`Template` fixture.
 
 ## Verification loop (run before every PR)
 
 ```bash
-uv run ruff check src tests && uv run ruff format --check src tests \
-  && uv run mypy src && uv run vulture && uv run pytest --cov
+uv run ruff check . && uv run ruff format --check . \
+  && uv run mypy src app.py && uv run vulture \
+  && uv run pytest --cov && uv run python app.py
 ```
 
-CI runs the same gate on push and PR. A `PostToolUse` hook auto-formats and
-re-lints each file you edit, so style is handled for you — spend your turns on
-logic, not formatting.
+CI runs the same gate on push and PR (it installs Node for CDK's jsii runtime).
+A `PostToolUse` hook auto-formats and re-lints each file you edit, so style is
+handled for you — spend your turns on logic, not formatting.

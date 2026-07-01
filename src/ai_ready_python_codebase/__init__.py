@@ -1,8 +1,7 @@
-"""A template python codebase that is designed to be AI first
+"""AWS CDK application that deploys a Hello World Lambda.
 
-Typical usage example:
-
-    from ai_ready_python_codebase import ...
+An AI-first template: the same lint / type / test / hook guardrails as the base
+Python template, applied to AWS CDK infrastructure code.
 """
 
 __version__ = "0.1.0"
