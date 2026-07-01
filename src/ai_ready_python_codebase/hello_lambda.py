@@ -20,6 +20,9 @@ class HelloLambda(Construct):
       * An explicit LogGroup with a retention policy. The log group Lambda would
         otherwise auto-create keeps logs forever and cannot be managed by CDK.
       * ARM64 (Graviton): cheaper and typically faster than x86 for Python.
+      * memory_size=128 (AWS's floor) and a 10s timeout: this handler does no
+        real work, so the cheapest, fastest-to-provision settings suffice — raise
+        both only once the handler actually needs the headroom.
       * The L2 Function construct auto-generates the standard basic-execution role
         (CloudWatch Logs access). cdk-nag flags that AWS-managed policy (IAM4);
         the suppression below documents the deliberate decision to accept it.
@@ -43,6 +46,8 @@ class HelloLambda(Construct):
             handler="index.handler",
             code=lambda_.Code.from_asset(
                 str(_HANDLER_DIR),
+                # Dev artifacts never run in Lambda; excluding them keeps the
+                # deploy asset hash stable across local runs (no spurious redeploys).
                 exclude=["__pycache__", "*.pyc"],
             ),
             memory_size=128,

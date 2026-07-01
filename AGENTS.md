@@ -57,12 +57,18 @@ npx cdk deploy                # deploy (needs AWS credentials)
 - **Lambda runtime**: Python 3.14 (latest) on ARM64.
 - **Node.js** — required even to run tests/synth: CDK Python calls into a Node
   runtime via jsii. (The **cdk** CLI, npm, is separate — needed only to deploy.)
+  Pinned to 22 in `.nvmrc`/CI: aws-cdk's own floor is Node ≥18, but 18 has reached
+  end-of-life, so 22 is the newest LTS line to build against.
 - Tooling: **uv**, **ruff**, **mypy**, **pytest**, **vulture**.
 
 ## Project structure
 
 - `app.py` — CDK entry point (thin orchestrator: compose stacks, `app.synth()`).
-- `cdk.json` — tells the CDK CLI how to run the app (`uv run python app.py`).
+- `cdk.json` — tells the CDK CLI how to run the app (`uv run python app.py`). Its
+  `context` block is the full feature-flag set `cdk init` stamps into new
+  projects: each flag defaults off so an already-deployed stack doesn't break,
+  but a brand-new stack has nothing to break, so it carries the whole
+  recommended set and starts on today's best-practice defaults.
 - `src/ai_ready_python_codebase/` — the package (import absolutely, never relative).
   - `hello_lambda.py` — `HelloLambda` construct (the Lambda + its log group).
   - `hello_stack.py` — `HelloStack` stack (composes constructs).
