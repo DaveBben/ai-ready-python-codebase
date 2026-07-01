@@ -9,7 +9,7 @@ from ai_ready_python_codebase.logger import setup_root_logger
 def main() -> int:
     """Run the application."""
     settings = Settings()
-    setup_root_logger(level=settings.log_level)
+    setup_root_logger(level=settings.log_level, json_format=settings.log_json)
 
     # TODO: Implement your CLI logic here
     print("ai-ready-python-codebase v0.1.0")

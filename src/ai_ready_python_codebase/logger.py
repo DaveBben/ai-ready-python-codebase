@@ -13,30 +13,47 @@ def setup_root_logger(
     *,
     name: str = "root",
     level: str = "INFO",
-    json_format: bool = False,
+    json_format: bool = True,
 ) -> None:
     """Configure application logging.
 
     Args:
         name: Root logger name for the application.
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-        json_format: If True, output logs as JSON for production.
+        json_format: If True (default), output logs as JSON. Both structlog
+            and standard-library loggers are rendered as JSON so that
+            ``get_logger`` records are structured too.
     """
     handler = logging.StreamHandler(sys.stdout)
+    formatter: logging.Formatter
 
     if json_format:
         import structlog
 
+        # Shared processor chain: add level, logger name, and an ISO timestamp.
+        shared_processors: list[structlog.typing.Processor] = [
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="iso"),
+        ]
+
         structlog.configure(
             processors=[
-                structlog.stdlib.add_log_level,
-                structlog.processors.TimeStamper(fmt="iso"),
-                structlog.processors.JSONRenderer(),
+                structlog.contextvars.merge_contextvars,
+                *shared_processors,
+                # Hand the event dict to ProcessorFormatter for final rendering.
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
             ],
             wrapper_class=structlog.stdlib.BoundLogger,
             logger_factory=structlog.stdlib.LoggerFactory(),
         )
-        formatter = logging.Formatter("%(message)s")
+
+        # ProcessorFormatter renders BOTH structlog and stdlib records as JSON.
+        # foreign_pre_chain runs on records from plain logging.getLogger loggers.
+        formatter = structlog.stdlib.ProcessorFormatter(
+            processor=structlog.processors.JSONRenderer(),
+            foreign_pre_chain=shared_processors,
+        )
     else:
         formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
 
