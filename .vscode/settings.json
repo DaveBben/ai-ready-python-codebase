@@ -1,0 +1,23 @@
+{
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    // "standard", not "strict": mypy (below) is the strict authority that gates
+    // CI/commits, so Pylance here only needs to catch obvious editor-time errors
+    // without duplicating/conflicting with mypy's stricter, sometimes-different
+    // findings in red squiggles.
+    "python.analysis.typeCheckingMode": "standard",
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+        }
+    },
+    // Docs and CLAUDE.md files use one line per paragraph (soft wrap) rather than
+    // hard-wrapping at a fixed column, so the editor must wrap them at the window
+    // edge. Without this, a paragraph shows as one long line running off-screen.
+    "[markdown]": {
+        "editor.wordWrap": "on"
+    },
+    "mypy-type-checker.args": ["--strict"]
+}

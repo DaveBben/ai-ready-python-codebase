@@ -1,0 +1,61 @@
+# Virtual environments (rebuilt inside the image)
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Test and coverage
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type-check and lint caches
+.mypy_cache/
+.ruff_cache/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Docs — but keep README.md; pyproject's `readme = "README.md"` builds the wheel.
+# (LICENSE has no extension, so it's kept for `license-files`.)
+*.md
+docs/
+!README.md
+
+# Environment files (may hold secrets)
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code config — not needed at runtime
+.claude/

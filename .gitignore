@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.so
+.env
+.DS_Store
+node_modules/
+
+# Claude Code: commit .claude/settings.json (shared team config + hooks) but keep
+# each developer's personal overrides local.
+.claude/settings.local.json
+
+# mutmut mutation-testing working dir
+mutants/

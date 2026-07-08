@@ -1,0 +1,10 @@
+# The example CLI runs once and exits, so run it one-shot rather than `up`:
+#   docker compose run --rm app     # build the image and run the CLI
+#   docker compose build            # build only
+services:
+  app:
+    build: .
+    image: example-project:latest
+    # Runtime config and secrets go here — never baked into the image. Add a
+    # volume under a top-level `volumes:` key if your app must persist state.
+    # env_file: .env

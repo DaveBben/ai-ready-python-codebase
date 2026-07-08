@@ -1,0 +1,70 @@
+# Git-level deterministic guardrail (research Pillar 3). Where the Claude Code
+# PostToolUse hook catches issues as the agent edits, pre-commit is the backstop
+# at commit time — nothing lands in a commit until these pass. Enable once with
+# `uv run pre-commit install`. Pinned revs so the checks are reproducible.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files      # stop an agent committing a huge artifact
+      - id: check-merge-conflict
+      - id: debug-statements             # no stray breakpoint()/pdb left behind
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.10.1
+    hooks:
+      - id: uv-lock       # keep uv.lock in sync with pyproject.toml deps
+
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: v2.12.1b3
+    hooks:
+      - id: hadolint          # Dockerfile linter; pip-installed binary, no Docker daemon needed
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks          # secret scan: stop an agent committing a key/token
+
+  # Everything below runs through `uv run`, so pre-commit uses the SAME pinned
+  # tool versions as the editor hook and CI — no "passes in the hook, fails at
+  # commit" skew from a separately-pinned mirror. Single source of truth = uv.lock.
+  - repo: local
+    hooks:
+      - id: ruff          # lint + auto-fix (rules in pyproject.toml, rationale in README.md)
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format   # format
+        name: ruff-format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: mypy          # strict types — the type oracle, too slow for the editor hook
+        name: mypy
+        entry: uv run mypy src
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: vulture       # unreachable/dead code ruff can't detect
+        name: vulture
+        entry: uv run vulture
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: pytest        # full suite, no --cov — coverage stays in the manual gate
+        name: pytest
+        entry: uv run pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: pip-audit     # dependency CVEs — network-bound, so only when deps change
+        name: pip-audit
+        entry: uv run pip-audit
+        language: system
+        files: ^uv\.lock$
+        pass_filenames: false

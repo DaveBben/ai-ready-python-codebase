@@ -1,0 +1,56 @@
+{
+  // Isolated dev environment for humans and AI agents: the container can't reach
+  // your home dir, SSH keys, or host tooling. Same uv-managed setup either way.
+  "name": "ai-ready-python-codebase",
+  "image": "mcr.microsoft.com/devcontainers/python:3.13",
+  "features": {
+    "ghcr.io/va-h/devcontainers-features/uv:1": {},
+    // Node runtime for the Claude Code CLI. The claude-code feature only declares
+    // installsAfter node (ordering), it does NOT install it, and the Python base
+    // image ships none — so this must be explicit.
+    "ghcr.io/devcontainers/features/node:1": {},
+    // Official Claude Code feature: installs the CLI and the VS Code extension.
+    // https://code.claude.com/docs/en/devcontainer
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  // Persist Claude Code's login across rebuilds in a container-owned volume, so you
+  // authenticate once. ${devcontainerId} scopes it per project, not shared globally.
+  // It's the container's own creds, never your host Keychain.
+  "mounts": [
+    "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    // Your personal host skills, read-only and live-synced. ${localEnv:HOME} keeps
+    // it portable; delete this line if you don't want personal skills in-container.
+    "source=${localEnv:HOME}/.claude/skills,target=/home/vscode/.claude/skills,type=bind,readonly=true"
+  ],
+  // Build the venv OFF the mounted repo. A venv hardcodes an interpreter path and
+  // OS-specific binaries, so a host (macOS) .venv on the bind-mount breaks in the
+  // Linux container and uv can't cleanly rebuild it. Keeping it here sidesteps that.
+  "containerEnv": {
+    "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv"
+    // No ANTHROPIC_API_KEY here on purpose. Default auth is OAuth (browser login,
+    // token persisted in the .claude volume) — no secret in env or config. An env
+    // var is readable via `docker inspect`, /proc/<pid>/environ, and by every child
+    // process, so in a --dangerously-skip-permissions sandbox the agent could read
+    // and exfiltrate it. If you must use a key, mount it as a read-only file and
+    // point Claude's apiKeyHelper at it — see README.
+  },
+  // Fix the fresh creds volume's ownership (named volumes mount root-owned), build
+  // the venv, and arm the commit gate. Runs once, on create.
+  "postCreateCommand": "sudo chown vscode:vscode /home/vscode/.claude && uv sync && uv run pre-commit install",
+  "customizations": {
+    "vscode": {
+      // Point the editor at the out-of-repo venv above.
+      "settings": {
+        "python.defaultInterpreterPath": "/home/vscode/.venv/bin/python"
+      },
+      // Mirror .vscode/extensions.json so the container matches the local editor.
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "tamasfe.even-better-toml"
+      ]
+    }
+  }
+}

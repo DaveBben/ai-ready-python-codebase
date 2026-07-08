@@ -1,0 +1,18 @@
+{
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "tamasfe.even-better-toml"
+    ],
+    // ruff already covers everything these four would do — running both means
+    // conflicting fixes/formatting (e.g. black vs ruff-format) and duplicate,
+    // noisier diagnostics for no extra coverage.
+    "unwantedRecommendations": [
+        "ms-python.pylint",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ms-python.flake8"
+    ]
+}
